@@ -22,6 +22,7 @@ use crate::tokenizer_manager::wiring::{AbortSource, RequestAdmission, TmEvent};
 use crate::utils::error::Error;
 use crate::utils::fsm::RequestState;
 
+use super::control::PEER_ABORT_MAX_IN_FLIGHT;
 use super::generate::{Cancellation, Generation, Generations};
 use crate::api_server::core::fanout::{ControlTarget, RankId};
 use crate::api_server::core::{CoreError, FrontendMetrics};
@@ -123,6 +124,9 @@ pub(super) struct CoreInner {
     /// The DP rank the local scheduler answers for, and the targets for the rest.
     pub(super) dp_rank: RankId,
     pub(super) peer_endpoints: Vec<Arc<dyn ControlTarget>>,
+    /// Relayed aborts in flight at once, across every abort (see
+    /// [`CoreHandle::abort_peers`]).
+    pub(super) peer_abort_permits: tokio::sync::Semaphore,
 }
 
 impl CoreHandle {
@@ -148,6 +152,7 @@ impl CoreHandle {
                 metrics: config.metrics,
                 dp_rank,
                 peer_endpoints: config.peer_endpoints,
+                peer_abort_permits: tokio::sync::Semaphore::new(PEER_ABORT_MAX_IN_FLIGHT),
             }),
         }
     }
